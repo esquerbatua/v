@@ -22,7 +22,7 @@ fn test_remove() {
 }
 
 fn test_merge() {
-	mut lwweset := new_lwweset[string]()
+	mut lwweset := crdt.new_lwweset[string]()
 	assert lwweset.lookup('some-test-element') == false
 	lwweset.add('some-test-element')
 	assert lwweset.lookup('some-test-element')

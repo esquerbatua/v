@@ -3,13 +3,13 @@ module crdt
 // Gset is a grow-only set.
 struct GSet[T] {
 mut:
-	main_set map[T]T
+	main_set map[T]bool
 }
 
 // new_gset returns an instance of GSet.
 pub fn new_gset[T]() GSet[T] {
 	return GSet[T]{
-		main_set: map[T]T{}
+		main_set: map[T]bool{}
 	}
 }
 
@@ -31,11 +31,7 @@ pub fn (mut g GSet[T]) len() int {
 
 // elements returns all the elements present in the set.
 pub fn (mut g GSet[T]) elements() []T {
-	mut elements := []T{}
-	for _, element in g.main_set {
-		elements << element
-	}
-	return elements
+	return g.main_set.keys()
 }
 
 // compare returns true if both of of sets are same, false otherwise.

@@ -1,16 +1,16 @@
-module crdt
+import datatypes.crdt
 
 fn test_increment() {
-	mut counter := new_gcounter()
+	mut counter := crdt.new_gcounter()
 	counter.increment()
 	assert counter.value() == 1
 }
 
 fn test_merge() {
-	mut first_counter := new_gcounter()
+	mut first_counter := crdt.new_gcounter()
 	first_counter.increment()
 	assert first_counter.value() == 1
-	mut second_counter := new_gcounter()
+	mut second_counter := crdt.new_gcounter()
 	second_counter.merge(first_counter)
 	assert second_counter.value() == 1
 }

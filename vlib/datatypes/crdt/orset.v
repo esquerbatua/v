@@ -38,9 +38,9 @@ pub fn (mut o ORSet[T]) remove(value T) {
 
 // lookup returns true if an element exists within the
 // set or false otherwise.
-pub fn (mut o ORSet[T]) lookup(value T) bool {
-	if value in o.add_map {
-		if value in o.rm_map {
+pub fn (mut o ORSet[T]) lookup(key T) bool {
+	if key in o.add_map {
+		if key in o.rm_map {
 			for uid, _ in o.add_map {
 				if uid !in o.rm_map {
 					return true

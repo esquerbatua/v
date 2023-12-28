@@ -1,7 +1,7 @@
 module crdt
 
 fn test_increment() {
-	mut pncounter := new_pncounter()
+	mut pncounter := crdt.new_pncounter()
 	pncounter.increment()
 	assert pncounter.value() == 1
 }
@@ -13,10 +13,10 @@ fn test_decrement() {
 }
 
 fn test_merge() {
-	mut first_pncounter := new_pncounter()
+	mut first_pncounter := crdt.new_pncounter()
 	first_pncounter.increment()
 	assert first_pncounter.value() == 1
-	mut second_pncounter := new_pncounter()
+	mut second_pncounter := crdt.new_pncounter()
 	second_pncounter.decrement()
 	assert second_pncounter.value() == -1
 	first_pncounter.merge(second_pncounter)

@@ -30,7 +30,7 @@ pub fn (mut g GCounter) increment() {
 	g.increment_value(1)
 }
 
-// inc_val allows passing in an arbitrary delta to increment the
+// increment_value allows passing in an arbitrary delta to increment the
 // current value of counter by. Only positive values are accepted.
 // If a negative value is provided the implementation will panic.
 pub fn (mut g GCounter) increment_value(value int) {
@@ -40,7 +40,7 @@ pub fn (mut g GCounter) increment_value(value int) {
 	g.counter[g.identity] += value
 }
 
-// count returns the total count of this counter across all the
+// value returns the total count of this counter across all the
 // present replicas.
 pub fn (mut g GCounter) value() int {
 	mut total := 0
@@ -50,7 +50,7 @@ pub fn (mut g GCounter) value() int {
 	return total
 }
 
-// Merge combines the counter values across multiple replicas.
+// merge combines the counter values across multiple replicas.
 // The property of idempotency is preserved here across
 // multiple merges as when no state is changed across any replicas,
 // the result should be exactly the same everytime.
