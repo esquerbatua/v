@@ -250,6 +250,8 @@ pub fn (mut ctx Context) send_response_to_client(mimetype string, res string) bo
 	fast_send_resp(mut ctx.conn, resp) or { return false }
 	unsafe {
 		resp.free()
+		mimetype.free()
+		res.free()
 	}
 	return true
 }

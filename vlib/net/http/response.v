@@ -17,7 +17,13 @@ pub mut:
 }
 
 pub fn (mut resp Response) free() {
-	unsafe { resp.header.free() }
+	unsafe {
+		resp.body.free()
+		resp.header.free()
+		//resp.status_code.free()
+		resp.status_msg.free()
+		resp.http_version.free()
+	}
 }
 
 // Formats resp to bytes suitable for HTTP response transmission
