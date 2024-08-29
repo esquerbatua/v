@@ -223,7 +223,6 @@ pub fn (ctx Context) before_request() {}
 
 // TODO: test
 // vweb intern function
-@[manualfree]
 pub fn (mut ctx Context) send_response_to_client(mimetype string, res string) bool {
 	if ctx.done {
 		return false
@@ -249,6 +248,9 @@ pub fn (mut ctx Context) send_response_to_client(mimetype string, res string) bo
 	resp.set_status(http.status_from_int(ctx.status.int()))
 	// send_string(mut ctx.conn, resp.bytestr()) or { return false }
 	fast_send_resp(mut ctx.conn, resp) or { return false }
+	unsafe {
+		resp.free()
+	}
 	return true
 }
 
@@ -669,9 +671,7 @@ fn new_request_app[T](global_app &T, ctx Context, tid int) &T {
 	return request_app
 }
 
-@[manualfree]
-fn handle_conn[T](mut conn net.TcpConn, global_app &T, controllers []&ControllerPath, routes &map[string]Route,
-	tid int) {
+fn handle_conn[T](mut conn net.TcpConn, global_app &T, controllers []&ControllerPath, routes &map[string]Route, tid int) {
 	conn.set_read_timeout(30 * time.second)
 	conn.set_write_timeout(30 * time.second)
 	defer {
@@ -684,11 +684,6 @@ fn handle_conn[T](mut conn net.TcpConn, global_app &T, controllers []&Controller
 	}
 
 	mut reader := io.new_buffered_reader(reader: conn)
-	defer {
-		unsafe {
-			reader.free()
-		}
-	}
 
 	page_gen_start := time.ticks()
 
@@ -699,6 +694,9 @@ fn handle_conn[T](mut conn net.TcpConn, global_app &T, controllers []&Controller
 			eprintln('[vweb] tid: ${tid:03d}, error parsing request: ${err}')
 		}
 		return
+	}
+	unsafe {
+		reader.free()
 	}
 	$if trace_request ? {
 		dump(req)
@@ -756,7 +754,6 @@ fn handle_conn[T](mut conn net.TcpConn, global_app &T, controllers []&Controller
 	handle_route(mut request_app, url, host, routes, tid)
 }
 
-@[manualfree]
 fn handle_route[T](mut app T, url urllib.URL, host string, routes &map[string]Route, tid int) {
 	defer {
 		unsafe {
@@ -1124,6 +1121,7 @@ pub fn not_found() Result {
 	return Result{}
 }
 
+@[inline]
 fn send_string(mut conn net.TcpConn, s string) ! {
 	$if trace_send_string_conn ? {
 		eprintln('> send_string: conn: ${ptr_str(conn)}')
