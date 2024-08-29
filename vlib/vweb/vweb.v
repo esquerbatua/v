@@ -673,6 +673,7 @@ fn new_request_app[T](global_app &T, ctx Context, tid int) &T {
 	return request_app
 }
 
+@[manualfree]
 fn handle_conn[T](mut conn net.TcpConn, global_app &T, controllers []&ControllerPath, routes &map[string]Route, tid int) {
 	conn.set_read_timeout(30 * time.second)
 	conn.set_write_timeout(30 * time.second)
@@ -756,14 +757,15 @@ fn handle_conn[T](mut conn net.TcpConn, global_app &T, controllers []&Controller
 	handle_route(mut request_app, url, host, routes, tid)
 }
 
+@[manualfree]
 fn handle_route[T](mut app T, url urllib.URL, host string, routes &map[string]Route, tid int) {
+	url_words := url.path.split('/').filter(it != '')
 	defer {
 		unsafe {
 			free(app)
+			free(url_words)
 		}
 	}
-
-	url_words := url.path.split('/').filter(it != '')
 
 	// Calling middleware...
 	app.before_request()
@@ -831,6 +833,9 @@ fn handle_route[T](mut app T, url urllib.URL, host string, routes &map[string]Ro
 							{
 								app.$method(args)
 							}
+							unsafe {
+								args.free()
+							}
 						} else {
 							if route.middleware == '' {
 								app.$method()
@@ -873,8 +878,14 @@ fn handle_route[T](mut app T, url urllib.URL, host string, routes &map[string]Ro
 						} else if validate_app_middleware(mut app, route.middleware, method.name) {
 							app.$method(method_args)
 						}
+						unsafe {
+							method_args.free()
+						}
 						return
 					}
+				}
+				unsafe {
+					route_words.free()
 				}
 			}
 		}
