@@ -164,7 +164,7 @@ pub fn run_at[A, X](mut global_app A, params RunParams) ! {
 
 	pico_context.idx = []int{len: picoev.max_fds}
 	// reserve space for read and write buffers
-	pico_context.buf = unsafe { malloc_noscan(picoev.max_fds * veb.max_read + 1) }
+	pico_context.buf = unsafe { malloc_noscan(picoev.max_fds * max_read + 1) }
 	pico_context.incomplete_requests = []http.Request{len: picoev.max_fds}
 	pico_context.file_responses = []FileResponse{len: picoev.max_fds}
 	pico_context.string_responses = []StringResponse{len: picoev.max_fds}
