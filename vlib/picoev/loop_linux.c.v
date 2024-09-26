@@ -57,7 +57,7 @@ fn (mut pv Picoev) update_events(fd int, events int) int {
 	mut ev := C.epoll_event{}
 
 	// fd belongs to loop
-	if events & picoev_del != target.events && target.loop_id != pv.loop[0].id {
+	if events & picoev_del != target.events && target.loop_id != pv.req_loop.id {
 		return -1
 	}
 
@@ -78,17 +78,17 @@ fn (mut pv Picoev) update_events(fd int, events int) int {
 		// nothing to do
 	} else if events & picoev_readwrite == 0 {
 		// delete the file if it exists
-		epoll_ret := C.epoll_ctl(pv.loop[0].epoll_fd, C.EPOLL_CTL_DEL, fd, &ev)
+		epoll_ret := C.epoll_ctl(pv.req_loop.epoll_fd, C.EPOLL_CTL_DEL, fd, &ev)
 
 		// check error
 		assert epoll_ret == 0
 	} else {
 		// change settings to 0
-		mut epoll_ret := C.epoll_ctl(pv.loop[0].epoll_fd, C.EPOLL_CTL_MOD, fd, &ev)
+		mut epoll_ret := C.epoll_ctl(pv.req_loop.epoll_fd, C.EPOLL_CTL_MOD, fd, &ev)
 		if epoll_ret != 0 {
 			// if the file is not present we want to add it
 			assert C.errno == C.ENOENT
-			epoll_ret = C.epoll_ctl(pv.loop[0].epoll_fd, C.EPOLL_CTL_ADD, fd, &ev)
+			epoll_ret = C.epoll_ctl(pv.req_loop.epoll_fd, C.EPOLL_CTL_ADD, fd, &ev)
 
 			// check error
 			assert epoll_ret == 0
@@ -102,7 +102,7 @@ fn (mut pv Picoev) update_events(fd int, events int) int {
 
 @[direct_array_access]
 fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
-	nevents := C.epoll_wait(pv.loop[0].epoll_fd, &pv.loop[0].events, max_fds, max_wait_in_sec * 1000)
+	nevents := C.epoll_wait(pv.req_loop.epoll_fd, &pv.req_loop.events, max_fds, max_wait_in_sec * 1000)
 
 	if nevents == -1 {
 		// timeout has occurred
@@ -110,12 +110,12 @@ fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
 	}
 
 	for i := 0; i < nevents; i++ {
-		mut event := pv.loop[0].events[i]
+		mut event := pv.req_loop.events[i]
 		target := unsafe { pv.file_descriptors[event.data.fd] }
 		unsafe {
 			assert event.data.fd < max_fds
 		}
-		if pv.loop[0].id == target.loop_id && target.events & picoev_readwrite != 0 {
+		if pv.req_loop.id == target.loop_id && target.events & picoev_readwrite != 0 {
 			mut read_events := 0
 			if event.events & u32(C.EPOLLIN) != 0 {
 				read_events |= picoev_read
@@ -132,7 +132,7 @@ fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
 			// defer epoll delete
 			event.events = 0
 			unsafe {
-				C.epoll_ctl(pv.loop[0].epoll_fd, C.EPOLL_CTL_DEL, event.data.fd, &event)
+				C.epoll_ctl(pv.req_loop.epoll_fd, C.EPOLL_CTL_DEL, event.data.fd, &event)
 			}
 		}
 	}

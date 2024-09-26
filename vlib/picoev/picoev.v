@@ -77,7 +77,7 @@ mut:
 	file_descriptors [max_fds]&Target
 	timeouts         map[int]i64
 	num_pools        int
-	req_loop         &LoopType = unsafe { nul }
+	req_loop         &LoopType = unsafe { nil }
 	loop             []&LoopType
 
 	buf &u8 = unsafe { nil }
@@ -156,6 +156,7 @@ pub fn (mut pv Picoev) delete(fd int) int {
 }
 
 fn (mut pv Picoev) loop_once(max_wait_in_sec int) int {
+	mut loop := pv.req_loop
 	loop.now = get_time()
 
 	if pv.poll_once(max_wait_in_sec) != 0 {
@@ -180,7 +181,7 @@ fn (mut pv Picoev) loop_once(max_wait_in_sec int) int {
 fn (mut pv Picoev) set_timeout(fd int, secs int) {
 	assert fd < max_fds
 	if secs != 0 {
-		pv.timeouts[fd] = pv.loop[0].now + secs
+		pv.timeouts[fd] = pv.req_loop.now + secs
 	} else {
 		pv.timeouts.delete(fd)
 	}
@@ -194,14 +195,14 @@ fn (mut pv Picoev) handle_timeout() {
 	mut to_remove := []int{}
 
 	for fd, timeout in pv.timeouts {
-		if timeout <= pv.loop[0].now {
+		if timeout <= pv.req_loop.now {
 			to_remove << fd
 		}
 	}
 
 	for fd in to_remove {
 		target := pv.file_descriptors[fd]
-		assert target.loop_id == pv.loop[0].id
+		assert target.loop_id == pv.req_loop.id
 		pv.timeouts.delete(fd)
 		unsafe { target.cb(fd, picoev_timeout, &pv) }
 	}
@@ -374,11 +375,12 @@ pub fn new(config Config) !&Picoev {
 		pv.out = unsafe { malloc_noscan(max_fds * config.max_write + 1) }
 	}
 
-	for loop_id in 0 .. config.num_pools {
-		pv.loop[loop_id] = pv.create_loop(loop_id)!
+	pv.req_loop = pv.create_loop(0)!
+	for loop_id in 1 .. config.num_pools+1 {
+		pv.loop << pv.create_loop(loop_id)!
 	}
 
-	if pv.loop[0] == unsafe { nil } {
+	if pv.req_loop == unsafe { nil } {
 		eprintln('Failed to create loop')
 		close_socket(listening_socket_fd)
 		return unsafe { nil }
