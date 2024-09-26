@@ -72,6 +72,7 @@ pub:
 	port                 int  = 8080
 	show_startup_message bool = true
 	timeout_in_seconds   int  = 30
+	num_loops            int  = 1
 }
 
 struct FileResponse {
@@ -151,7 +152,7 @@ pub fn run_at[A, X](mut global_app A, params RunParams) ! {
 
 	if params.show_startup_message {
 		host := if params.host == '' { 'localhost' } else { params.host }
-		println('[veb] Running app on http://${host}:${params.port}/')
+		println('[veb] Running app on http://${host}:${params.port}/, num_loops: ${params.num_loops}')
 	}
 	flush_stdout()
 

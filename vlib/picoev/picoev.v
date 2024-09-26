@@ -54,6 +54,7 @@ pub:
 	max_write    int                       = 8192
 	family       net.AddrFamily            = .ip6
 	host         string
+	num_pools    int = 1
 }
 
 // Core structure for managing the event loop and connections.
@@ -72,10 +73,12 @@ pub struct Picoev {
 	err_cb fn (voidptr, picohttpparser.Request, mut picohttpparser.Response, IError) = default_error_callback @[deprecated: 'use `error_callback` instead']
 	raw_cb fn (mut Picoev, int, int) = unsafe { nil } @[deprecated: 'use `raw_callback` instead']
 mut:
-	loop             &LoopType = unsafe { nil }
+	last_loop        int
 	file_descriptors [max_fds]&Target
 	timeouts         map[int]i64
-	num_loops        int
+	num_pools        int
+	req_loop         &LoopType = unsafe { nul }
+	loop             []&LoopType
 
 	buf &u8 = unsafe { nil }
 	idx [1024]int
@@ -89,8 +92,6 @@ pub:
 // init fills the `file_descriptors` array
 pub fn (mut pv Picoev) init() {
 	assert max_fds > 0
-
-	pv.num_loops = 0
 
 	for i in 0 .. max_fds {
 		pv.file_descriptors[i] = &Target{}
@@ -107,7 +108,7 @@ pub fn (mut pv Picoev) add(fd int, events int, timeout int, callback voidptr) in
 	mut target := pv.file_descriptors[fd]
 	target.fd = fd
 	target.cb = callback
-	target.loop_id = pv.loop.id
+	target.loop_id = pv.req_loop.id
 	target.events = 0
 
 	if pv.update_events(fd, events | picoev_add) != 0 {
@@ -124,7 +125,7 @@ pub fn (mut pv Picoev) add(fd int, events int, timeout int, callback voidptr) in
 
 // del remove a file descriptor from the event loop
 @[deprecated: 'use delete() instead']
-@[direct_array_access]
+@[inline]
 pub fn (mut pv Picoev) del(fd int) int {
 	return pv.delete(fd)
 }
@@ -155,7 +156,7 @@ pub fn (mut pv Picoev) delete(fd int) int {
 }
 
 fn (mut pv Picoev) loop_once(max_wait_in_sec int) int {
-	pv.loop.now = get_time()
+	loop.now = get_time()
 
 	if pv.poll_once(max_wait_in_sec) != 0 {
 		eprintln('Error during poll_once')
@@ -163,7 +164,7 @@ fn (mut pv Picoev) loop_once(max_wait_in_sec int) int {
 	}
 
 	if max_wait_in_sec != 0 {
-		pv.loop.now = get_time() // Update loop start time again if waiting occurred
+		loop.now = get_time() // Update loop start time again if waiting occurred
 	} else {
 		// If no waiting, skip timeout handling for potential performance optimization
 		return 0
@@ -179,7 +180,7 @@ fn (mut pv Picoev) loop_once(max_wait_in_sec int) int {
 fn (mut pv Picoev) set_timeout(fd int, secs int) {
 	assert fd < max_fds
 	if secs != 0 {
-		pv.timeouts[fd] = pv.loop.now + secs
+		pv.timeouts[fd] = pv.loop[0].now + secs
 	} else {
 		pv.timeouts.delete(fd)
 	}
@@ -193,14 +194,14 @@ fn (mut pv Picoev) handle_timeout() {
 	mut to_remove := []int{}
 
 	for fd, timeout in pv.timeouts {
-		if timeout <= pv.loop.now {
+		if timeout <= pv.loop[0].now {
 			to_remove << fd
 		}
 	}
 
 	for fd in to_remove {
 		target := pv.file_descriptors[fd]
-		assert target.loop_id == pv.loop.id
+		assert target.loop_id == pv.loop[0].id
 		pv.timeouts.delete(fd)
 		unsafe { target.cb(fd, picoev_timeout, &pv) }
 	}
@@ -356,7 +357,8 @@ pub fn new(config Config) !&Picoev {
 	}
 
 	mut pv := &Picoev{
-		num_loops:      1
+		num_pools:      config.num_pools
+		loop:           unsafe { []&LoopType{len: config.num_pools, init: nil} }
 		cb:             config.cb
 		error_callback: config.err_cb
 		raw_callback:   config.raw_cb
@@ -372,18 +374,11 @@ pub fn new(config Config) !&Picoev {
 		pv.out = unsafe { malloc_noscan(max_fds * config.max_write + 1) }
 	}
 
-	// epoll on linux
-	// kqueue on macos and bsd
-	// select on windows and others
-	$if linux {
-		pv.loop = create_epoll_loop(0) or { panic(err) }
-	} $else $if freebsd || macos {
-		pv.loop = create_kqueue_loop(0) or { panic(err) }
-	} $else {
-		pv.loop = create_select_loop(0) or { panic(err) }
+	for loop_id in 0 .. config.num_pools {
+		pv.loop[loop_id] = pv.create_loop(loop_id)!
 	}
 
-	if pv.loop == unsafe { nil } {
+	if pv.loop[0] == unsafe { nil } {
 		eprintln('Failed to create loop')
 		close_socket(listening_socket_fd)
 		return unsafe { nil }
@@ -393,6 +388,21 @@ pub fn new(config Config) !&Picoev {
 
 	pv.add(listening_socket_fd, picoev_read, 0, accept_callback)
 	return pv
+}
+
+// create_loop - Creates a new Event Loop
+pub fn (mut pv Picoev) create_loop(id int) !&LoopType {
+	// epoll on linux
+	// kqueue on macos and bsd
+	// select on windows and others
+	$if linux {
+		return create_epoll_loop(id) or { panic(err) }
+	} $else $if freebsd || macos {
+		return create_kqueue_loop(id) or { panic(err) }
+	} $else {
+		return create_select_loop(id) or { panic(err) }
+	}
+	return unsafe { nil }
 }
 
 // serve starts the event loop for accepting new connections
