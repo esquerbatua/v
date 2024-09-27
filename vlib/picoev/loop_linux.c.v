@@ -60,18 +60,15 @@ fn (mut pv Picoev) update_events(fd int, events int) int {
 	if events & picoev_del != target.events && target.loop_id != pv.req_loop.id {
 		return -1
 	}
-
 	if events & picoev_readwrite == target.events {
 		return 0
 	}
 
-	// vfmt off
-	ev.events = u32(
-		(if events & picoev_read != 0 { C.EPOLLIN } else { 0 })
-			|
-		(if events & picoev_write != 0 { C.EPOLLOUT } else { 0 })
-	)
-	// vfmt on
+	ev.events = u32((if events & picoev_read != 0 { C.EPOLLIN } else { 0 }) | (if events & picoev_write != 0 {
+		C.EPOLLOUT
+	} else {
+		0
+	}))
 	ev.data.fd = fd
 
 	if events & picoev_del != 0 {
@@ -101,8 +98,8 @@ fn (mut pv Picoev) update_events(fd int, events int) int {
 }
 
 @[direct_array_access]
-fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
-	nevents := C.epoll_wait(pv.req_loop.epoll_fd, &pv.req_loop.events, max_fds, max_wait_in_sec * 1000)
+fn (mut pv Picoev) poll_once(loop LoopType, max_wait_in_sec int) int {
+	nevents := C.epoll_wait(loop.epoll_fd, &loop.events, max_fds, max_wait_in_sec * 1000)
 
 	if nevents == -1 {
 		// timeout has occurred
@@ -110,12 +107,12 @@ fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
 	}
 
 	for i := 0; i < nevents; i++ {
-		mut event := pv.req_loop.events[i]
+		mut event := loop.events[i]
 		target := unsafe { pv.file_descriptors[event.data.fd] }
 		unsafe {
 			assert event.data.fd < max_fds
 		}
-		if pv.req_loop.id == target.loop_id && target.events & picoev_readwrite != 0 {
+		if loop.id == target.loop_id && target.events & picoev_readwrite != 0 {
 			mut read_events := 0
 			if event.events & u32(C.EPOLLIN) != 0 {
 				read_events |= picoev_read
@@ -131,9 +128,7 @@ fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
 		} else {
 			// defer epoll delete
 			event.events = 0
-			unsafe {
-				C.epoll_ctl(pv.req_loop.epoll_fd, C.EPOLL_CTL_DEL, event.data.fd, &event)
-			}
+			unsafe { C.epoll_ctl(loop.epoll_fd, C.EPOLL_CTL_DEL, event.data.fd, &event) }
 		}
 	}
 	return 0

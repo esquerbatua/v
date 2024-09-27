@@ -9,26 +9,10 @@ import time
 import strings
 import picoev
 
-// A type which doesn't get filtered inside templates
-pub type RawHtml = string
-
-// A dummy structure that returns from routes to indicate that you actually sent something to a user
-@[noinit]
-pub struct Result {}
-
 // no_result does nothing, but returns `veb.Result`. Only use it when you are sure
 // a response will be send over the connection, or in combination with `Context.takeover_conn`
 pub fn no_result() Result {
 	return Result{}
-}
-
-struct Route {
-	methods []http.Method
-	path    string
-	host    string
-mut:
-	middlewares       []voidptr
-	after_middlewares []voidptr
 }
 
 // Generate route structs for an app
@@ -59,29 +43,9 @@ fn generate_routes[A, X](app &A) !map[string]Route {
 }
 
 // run - start a new veb server, listening to all available addresses, at the specified `port`
+@[inline]
 pub fn run[A, X](mut global_app A, port int) {
 	run_at[A, X](mut global_app, host: '', port: port, family: .ip6) or { panic(err.msg()) }
-}
-
-@[params]
-pub struct RunParams {
-pub:
-	// use `family: .ip, host: 'localhost'` when you want it to bind only to 127.0.0.1
-	family               net.AddrFamily = .ip6
-	host                 string
-	port                 int  = 8080
-	show_startup_message bool = true
-	timeout_in_seconds   int  = 30
-	num_loops            int  = 1
-}
-
-struct FileResponse {
-pub mut:
-	open              bool
-	file              os.File
-	total             i64
-	pos               i64
-	should_close_conn bool
 }
 
 // close the open file and reset the struct to its default values
@@ -93,14 +57,6 @@ pub fn (mut fr FileResponse) done() {
 	fr.should_close_conn = false
 }
 
-struct StringResponse {
-pub mut:
-	open              bool
-	str               string
-	pos               i64
-	should_close_conn bool
-}
-
 // free the current string and reset the struct to its default values
 @[manualfree]
 pub fn (mut sr StringResponse) done() {
@@ -110,33 +66,11 @@ pub fn (mut sr StringResponse) done() {
 	unsafe { sr.str.free() }
 }
 
-// EV context
-struct RequestParams {
-	global_app         voidptr
-	controllers        []&ControllerPath
-	routes             &map[string]Route
-	timeout_in_seconds int
-mut:
-	// request body buffer
-	buf &u8 = unsafe { nil }
-	// idx keeps track of how much of the request body has been read
-	// for each incomplete request, see `handle_conn`
-	idx                 []int
-	incomplete_requests []http.Request
-	file_responses      []FileResponse
-	string_responses    []StringResponse
-}
-
 // reset request parameters for `fd`:
 // reset content-length index and the http request
 pub fn (mut params RequestParams) request_done(fd int) {
 	params.incomplete_requests[fd] = http.Request{}
 	params.idx[fd] = 0
-}
-
-interface BeforeAcceptApp {
-mut:
-	before_accept_loop()
 }
 
 // run_at - start a new veb server, listening only on a specific address `host`, at the specified `port`

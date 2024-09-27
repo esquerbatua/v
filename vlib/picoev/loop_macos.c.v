@@ -159,18 +159,16 @@ fn (mut pv Picoev) update_events(fd int, events int) int {
 }
 
 @[direct_array_access]
-fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
+fn (mut pv Picoev) poll_once(loop LoopType, max_wait_in_sec int) int {
 	ts := C.timespec{
 		tv_sec:  max_wait_in_sec
 		tv_nsec: 0
 	}
 
-	mut total, mut nevents := 0, 0
 	// apply changes later when the callback is called.
-	total = pv.apply_pending_changes(false)
-
-	nevents = C.kevent(pv.req_loop.kq_id, &pv.req_loop.changelist, total, &pv.req_loop.events,
-		pv.req_loop.events.len, &ts)
+	total := pv.apply_pending_changes(false)
+	nevents := C.kevent(loop.kq_id, &loop.changelist, total, &loop.events, loop.events.len,
+		&ts)
 	if nevents == -1 {
 		// the errors we can only rescue
 		assert C.errno == C.EACCES || C.errno == C.EFAULT || C.errno == C.EINTR
@@ -178,23 +176,17 @@ fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
 	}
 
 	for i := 0; i < nevents; i++ {
-		event := pv.req_loop.events[i]
+		event := loop.events[i]
 		target := pv.file_descriptors[event.ident]
 
 		// changelist errors are fatal
 		assert event.flags & C.EV_ERROR == 0
 
-		if pv.req_loop.id == target.loop_id && event.filter & (C.EVFILT_READ | C.EVFILT_WRITE) != 0 {
+		if loop.id == target.loop_id && event.filter & (C.EVFILT_READ | C.EVFILT_WRITE) != 0 {
 			read_events := match int(event.filter) {
-				C.EVFILT_READ {
-					picoev_read
-				}
-				C.EVFILT_WRITE {
-					picoev_write
-				}
-				else {
-					0
-				}
+				C.EVFILT_READ { picoev_read }
+				C.EVFILT_WRITE { picoev_write }
+				else { 0 }
 			}
 
 			// do callback!

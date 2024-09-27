@@ -4,30 +4,6 @@ import net
 import picohttpparser
 import time
 
-// maximum number of file descriptors that can be managed
-pub const max_fds = 1024
-
-// maximum size of the event queue
-pub const max_queue = 4096
-
-// event for incoming data ready to be read on a socket
-pub const picoev_read = 1
-
-// event for socket ready for writing
-pub const picoev_write = 2
-
-// event indicating a timeout has occurred
-pub const picoev_timeout = 4
-
-// flag for adding a file descriptor to the event loop
-pub const picoev_add = 0x40000000
-
-// flag for removing a file descriptor from the event loop
-pub const picoev_del = 0x20000000
-
-// event read/write
-pub const picoev_readwrite = 3
-
 // Target is a data representation of everything that needs to be associated with a single
 // file descriptor (connection)
 pub struct Target {
@@ -114,7 +90,6 @@ pub fn (mut pv Picoev) add(fd int, events int, timeout int, callback voidptr) in
 		if pv.delete(fd) != 0 {
 			eprintln('Error during del')
 		}
-
 		return -1
 	}
 
@@ -151,26 +126,6 @@ pub fn (mut pv Picoev) delete(fd int) int {
 	target.loop_id = -1
 	target.fd = 0
 	target.cb = unsafe { nil } // Clear callback to prevent accidental invocations
-	return 0
-}
-
-fn (mut pv Picoev) loop_once(max_wait_in_sec int) int {
-	mut loop := pv.req_loop
-	loop.now = get_time()
-
-	if pv.poll_once(max_wait_in_sec) != 0 {
-		eprintln('Error during poll_once')
-		return -1
-	}
-
-	if max_wait_in_sec != 0 {
-		loop.now = get_time() // Update loop start time again if waiting occurred
-	} else {
-		// If no waiting, skip timeout handling for potential performance optimization
-		return 0
-	}
-
-	pv.handle_timeout()
 	return 0
 }
 
@@ -390,28 +345,16 @@ pub fn new(config Config) !&Picoev {
 	return pv
 }
 
-// create_loop - Creates a new Event Loop
-pub fn (mut pv Picoev) create_loop(id int) !&LoopType {
-	// epoll on linux
-	// kqueue on macos and bsd
-	// select on windows and others
-	$if linux {
-		return create_epoll_loop(id) or { panic(err) }
-	} $else $if freebsd || macos {
-		return create_kqueue_loop(id) or { panic(err) }
-	} $else {
-		return create_select_loop(id) or { panic(err) }
-	}
-	return unsafe { nil }
-}
-
 // serve starts the event loop for accepting new connections
 // See also picoev.new().
 pub fn (mut pv Picoev) serve() {
 	spawn update_date_string(mut pv)
+	for nloop in 0 .. pv.num_pools {
+		spawn pv.loop_once(mut pv.loop[nloop], 1)
+	}
 
 	for {
-		pv.loop_once(1)
+		pv.loop_once(mut pv.req_loop, 1)
 	}
 }
 
