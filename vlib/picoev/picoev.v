@@ -73,12 +73,11 @@ pub struct Picoev {
 	err_cb fn (voidptr, picohttpparser.Request, mut picohttpparser.Response, IError) = default_error_callback @[deprecated: 'use `error_callback` instead']
 	raw_cb fn (mut Picoev, int, int) = unsafe { nil } @[deprecated: 'use `raw_callback` instead']
 mut:
-	// last_loop        int
 	file_descriptors [max_fds]&Target
 	timeouts         map[int]i64
 	num_pools        int
 	req_loop         &LoopType = unsafe { nil }
-	// loop             []&LoopType
+	loop             []&LoopType
 
 	buf &u8 = unsafe { nil }
 	idx [1024]int
@@ -375,9 +374,9 @@ pub fn new(config Config) !&Picoev {
 	}
 
 	pv.req_loop = pv.create_loop(0)!
-	// for loop_id in 1 .. config.num_pools+1 {
-	// 	pv.loop << pv.create_loop(loop_id)!
-	// }
+	for loop_id in 1 .. config.num_pools + 1 {
+		pv.loop << pv.create_loop(loop_id)!
+	}
 
 	if pv.req_loop == unsafe { nil } {
 		eprintln('Failed to create loop')
