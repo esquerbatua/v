@@ -73,7 +73,7 @@ fn backend_build(next_fd int, events u32) int {
 
 // get the lower 8 bits
 @[inline]
-fn backend_get_old_events(backend int) int {loop &LoopType, 
+fn backend_get_old_events(backend int) int {
 	return backend & 0xff
 }
 
