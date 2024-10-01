@@ -31,14 +31,14 @@ pub enum SocketOption {
 	receive_low_size = C.SO_RCVLOWAT
 	receive_timeout  = C.SO_RCVTIMEO
 	reuse_addr       = C.SO_REUSEADDR
-	reuse_port       = C.SO_REUSEPORT // TODO make it work in windows
+	reuse_port       = $if windows { C.SO_REUSEADDR } else { C.SO_REUSEPORT } // TODO make it work in windows tcc & gcc
 	send_buf_size    = C.SO_SNDBUF
 	send_low_size    = C.SO_SNDLOWAT
 	send_timeout     = C.SO_SNDTIMEO
 	socket_type      = C.SO_TYPE
-	tcp_defer_accept = C.TCP_DEFER_ACCEPT // TODO make it work in os != linux
-	tcp_fastopen     = C.TCP_FASTOPEN     // TODO make it work in windows
-	tcp_quickack     = C.TCP_QUICKACK     // TODO make it work in os != linux
+	tcp_defer_accept = C.TCP_DEFER_ACCEPT // TODO make it work in windows gcc & mac
+	tcp_fastopen     = C.TCP_FASTOPEN     // TODO make it work in windows gcc
+	tcp_quickack     = C.TCP_QUICKACK     // TODO make it work in windows gcc & mac
 }
 
 pub const opts_bool = [SocketOption.broadcast, .debug, .dont_route, .error, .keep_alive, .oob_inline]
