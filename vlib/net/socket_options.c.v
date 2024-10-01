@@ -2,7 +2,6 @@ module net
 
 #include <errno.h>
 #include <sys/types.h>
-#include <sys/event.h>
 $if windows {
 	#include <winsock2.h>
 	#include <ws2tcpip.h>
