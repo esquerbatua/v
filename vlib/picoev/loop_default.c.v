@@ -47,7 +47,7 @@ fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
 
 	// finds the maximum file descriptor and adds sockets to the sets `fd_sets`.
 	for target in pv.file_descriptors {
-		if target.loop_id == pv.loop.id {
+		if target.loop_id == pv.req_loop.id {
 			if target.events & picoev_read != 0 {
 				C.FD_SET(target.fd, &readfds)
 				if maxfd < target.fd {
@@ -75,7 +75,7 @@ fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
 	} else if r > 0 {
 		// Iterates through file descriptors and calls their callbacks for triggered events
 		for target in pv.file_descriptors {
-			if target.loop_id == pv.loop.id {
+			if target.loop_id == pv.req_loop.id {
 				mut read_events := 0
 				if C.FD_ISSET(target.fd, &readfds) != 0 {
 					read_events |= picoev_read

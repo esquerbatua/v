@@ -50,7 +50,7 @@ pub fn create_kqueue_loop(id int) !&KqueueLoop {
 
 // ev_set sets a new `kevent` with file descriptor `index`
 @[inline]
-pub fn (mut pv Picoev) ev_set(index int, operation int, events int) {
+pub fn (mut pv Picoev) ev_set(loop LoopType, index int, operation int, events int) {
 	mut filter := 0
 	if events & picoev_read != 0 {
 		filter |= C.EVFILT_READ
@@ -60,8 +60,7 @@ pub fn (mut pv Picoev) ev_set(index int, operation int, events int) {
 	}
 	filter = i16(filter)
 
-	C.EV_SET(&pv.loop.changelist[index], pv.loop.changed_fds, filter, operation, 0, 0,
-		0)
+	C.EV_SET(&loop.changelist[index], loop.changed_fds, filter, operation, 0, 0, 0)
 }
 
 // backend_build uses the lower 8 bits to store the old events and the higher 8
@@ -88,8 +87,8 @@ fn backend_get_next_fd(backend int) int {
 fn (mut pv Picoev) apply_pending_changes(apply_all bool) int {
 	mut total, mut nevents := 0, 0
 
-	for pv.loop.changed_fds != -1 {
-		mut target := pv.file_descriptors[pv.loop.changed_fds]
+	for pv.req_loop.changed_fds != -1 {
+		mut target := pv.file_descriptors[pv.req_loop.changed_fds]
 		old_events := backend_get_old_events(target.backend)
 		if target.events != old_events {
 			// events have been changed
@@ -102,20 +101,21 @@ fn (mut pv Picoev) apply_pending_changes(apply_all bool) int {
 				total++
 			}
 			// Apply the changes if the total changes exceed the changelist size
-			if total + 1 >= pv.loop.changelist.len {
-				nevents = C.kevent(pv.loop.kq_id, &pv.loop.changelist, total, C.NULL,
-					0, C.NULL)
+			if total + 1 >= pv.req_loop.changelist.len {
+				nevents = C.kevent(pv.req_loop.kq_id, &pv.req_loop.changelist, total,
+					C.NULL, 0, C.NULL)
 				assert nevents == 0
 				total = 0
 			}
 		}
 
-		pv.loop.changed_fds = backend_get_next_fd(target.backend)
+		pv.req_loop.changed_fds = backend_get_next_fd(target.backend)
 		target.backend = -1
 	}
 
 	if apply_all && total != 0 {
-		nevents = C.kevent(pv.loop.kq_id, &pv.loop.changelist, total, C.NULL, 0, C.NULL)
+		nevents = C.kevent(pv.req_loop.kq_id, &pv.req_loop.changelist, total, C.NULL,
+			0, C.NULL)
 		assert nevents == 0
 		total = 0
 	}
@@ -124,7 +124,7 @@ fn (mut pv Picoev) apply_pending_changes(apply_all bool) int {
 }
 
 @[direct_array_access]
-fn (mut pv Picoev) update_events(fd int, events int) int {
+fn (mut pv Picoev) update_events(loop LoopType, fd int, events int) int {
 	// check if fd is in range
 	assert fd < max_fds
 
@@ -143,8 +143,8 @@ fn (mut pv Picoev) update_events(fd int, events int) int {
 
 	// add to changed list if not yet being done
 	if target.backend == -1 {
-		target.backend = backend_build(pv.loop.changed_fds, target.events)
-		pv.loop.changed_fds = fd
+		target.backend = backend_build(pv.req_loop.changed_fds, target.events)
+		pv.req_loop.changed_fds = fd
 	}
 
 	// update events
@@ -158,17 +158,15 @@ fn (mut pv Picoev) update_events(fd int, events int) int {
 }
 
 @[direct_array_access]
-fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
+fn (mut pv Picoev) poll_once(loop LoopType, max_wait_in_sec int) int {
 	ts := C.timespec{
 		tv_sec:  max_wait_in_sec
 		tv_nsec: 0
 	}
 
-	mut total, mut nevents := 0, 0
 	// apply changes later when the callback is called.
-	total = pv.apply_pending_changes(false)
-
-	nevents = C.kevent(pv.loop.kq_id, &pv.loop.changelist, total, &pv.loop.events, pv.loop.events.len,
+	total := pv.apply_pending_changes(false)
+	nevents := C.kevent(loop.kq_id, &loop.changelist, total, &loop.events, loop.events.len,
 		&ts)
 	if nevents == -1 {
 		// the errors we can only rescue
@@ -177,23 +175,17 @@ fn (mut pv Picoev) poll_once(max_wait_in_sec int) int {
 	}
 
 	for i := 0; i < nevents; i++ {
-		event := pv.loop.events[i]
+		event := loop.events[i]
 		target := pv.file_descriptors[event.ident]
 
 		// changelist errors are fatal
 		assert event.flags & C.EV_ERROR == 0
 
-		if pv.loop.id == target.loop_id && event.filter & (C.EVFILT_READ | C.EVFILT_WRITE) != 0 {
+		if loop.id == target.loop_id && event.filter & (C.EVFILT_READ | C.EVFILT_WRITE) != 0 {
 			read_events := match int(event.filter) {
-				C.EVFILT_READ {
-					picoev_read
-				}
-				C.EVFILT_WRITE {
-					picoev_write
-				}
-				else {
-					0
-				}
+				C.EVFILT_READ { picoev_read }
+				C.EVFILT_WRITE { picoev_write }
+				else { 0 }
 			}
 
 			// do callback!
