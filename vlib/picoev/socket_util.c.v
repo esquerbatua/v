@@ -110,10 +110,11 @@ fn listen(config Config) !int {
 
 	$if linux {
 		// epoll socket options
-		socket.set_option_bool(.reuse_port, true)!
-		socket.set_option_bool(.tcp_quickack, true)!
-		socket.set_option_int(.tcp_defer_accept, config.timeout_secs)!
-		socket.set_option_int(.tcp_fastopen, max_queue)!
+		net.socket_error(C.setsockopt(fd, C.SOL_SOCKET, C.SO_REUSEPORT, &flag, sizeof(int)))!
+		net.socket_error(C.setsockopt(fd, C.IPPROTO_TCP, C.TCP_QUICKACK, &flag, sizeof(int)))!
+		net.socket_error(C.setsockopt(fd, C.IPPROTO_TCP, C.TCP_DEFER_ACCEPT, &config.timeout_secs, sizeof(int)))!
+		queue_len := max_queue
+		net.socket_error(C.setsockopt(fd, C.IPPROTO_TCP, C.TCP_FASTOPEN, &queue_len, sizeof(int)))!
 	}
 
 	// addr settings
