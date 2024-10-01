@@ -1,17 +1,19 @@
 module net
 
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/event.h>
 $if windows {
 	#include <winsock2.h>
 	#include <ws2tcpip.h>
 } $else $if freebsd || macos {
-	#include <sys/types.h>
 	#include <sys/socket.h>
 	#include <netinet/in.h>
 	#include <netinet/tcp.h>
 } $else {
 	#include <netinet/tcp.h>
 	#include <sys/resource.h>
+	#include <sys/select.h>
 }
 
 pub enum SocketOption {
