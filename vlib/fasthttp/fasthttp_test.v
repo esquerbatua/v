@@ -145,3 +145,187 @@ fn test_server_ipv4_ipv6_binding() {
 	assert server_ipv4.port == 8081
 	assert server_ipv6.port == 8082
 }
+
+// Test large request buffer handling
+fn test_large_request_buffer() {
+	handler := fn (req HttpRequest) !HttpResponse {
+		return HttpResponse{
+			content: 'HTTP/1.1 200 OK\r\n\r\nOK'.bytes()
+		}
+	}
+
+	// Test with large buffer size
+	server := new_server(ServerConfig{
+		port:                    8083
+		handler:                 handler
+		max_request_buffer_size: 16384
+	}) or {
+		assert false, 'Failed to create server with large buffer: ${err}'
+		return
+	}
+
+	assert server.max_request_buffer_size == 16384
+}
+
+// Test invalid port numbers
+fn test_invalid_port_numbers() {
+	handler := fn (req HttpRequest) !HttpResponse {
+		return HttpResponse{
+			content: 'HTTP/1.1 200 OK\r\n\r\nOK'.bytes()
+		}
+	}
+
+	// Port too low
+	new_server(ServerConfig{
+		port:    0
+		handler: handler
+	}) or {
+		assert err.msg().contains('max_request_buffer_size'), 'Expected buffer size error, got: ${err}'
+		return
+	}
+
+	// Port too high would be caught at socket creation, not server creation
+	server := new_server(ServerConfig{
+		port:    99999
+		handler: handler
+	}) or {
+		assert false, 'Should create server with high port (fails at bind time): ${err}'
+		return
+	}
+	assert server.port == 99999
+}
+
+// Test request with query parameters
+fn test_parse_request_with_query() {
+	request := 'GET /search?q=test&page=1 HTTP/1.1\r\n'.bytes()
+	req := decode_http_request(request) or {
+		assert false, 'Failed to parse request with query: ${err}'
+		return
+	}
+
+	path := req.buffer[req.path.start..req.path.start + req.path.len].bytestr()
+	assert path == '/search?q=test&page=1'
+}
+
+// Test request with headers
+fn test_parse_request_with_headers() {
+	request := 'GET / HTTP/1.1\r\nHost: example.com\r\nUser-Agent: V-Test\r\n\r\n'.bytes()
+	req := decode_http_request(request) or {
+		assert false, 'Failed to parse request with headers: ${err}'
+		return
+	}
+
+	headers := req.buffer[req.header_fields.start..req.header_fields.start + req.header_fields.len].bytestr()
+	assert headers.contains('Host: example.com')
+	assert headers.contains('User-Agent: V-Test')
+}
+
+// Test POST request with body
+fn test_parse_post_request_with_body() {
+	body := '{"key":"value"}'
+	request := 'POST /api HTTP/1.1\r\nContent-Length: ${body.len}\r\n\r\n${body}'.bytes()
+	req := decode_http_request(request) or {
+		assert false, 'Failed to parse POST with body: ${err}'
+		return
+	}
+
+	method := req.buffer[req.method.start..req.method.start + req.method.len].bytestr()
+	path := req.buffer[req.path.start..req.path.start + req.path.len].bytestr()
+	body_parsed := req.buffer[req.body.start..req.body.start + req.body.len].bytestr()
+
+	assert method == 'POST'
+	assert path == '/api'
+	assert body_parsed == body
+}
+
+// Test different HTTP methods
+fn test_parse_different_http_methods() {
+	methods := ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
+
+	for method in methods {
+		request := '${method} /test HTTP/1.1\r\n'.bytes()
+		req := decode_http_request(request) or {
+			assert false, 'Failed to parse ${method} request: ${err}'
+			continue
+		}
+
+		parsed_method := req.buffer[req.method.start..req.method.start + req.method.len].bytestr()
+		assert parsed_method == method, 'Expected ${method}, got ${parsed_method}'
+	}
+}
+
+// Test request with various edge cases
+fn test_parse_request_edge_cases() {
+	// Test with minimal valid request
+	request := 'GET / HTTP/1.1\r\n\r\n'.bytes()
+	req := decode_http_request(request) or {
+		assert false, 'Failed to parse minimal request: ${err}'
+		return
+	}
+
+	method := req.buffer[req.method.start..req.method.start + req.method.len].bytestr()
+	assert method == 'GET'
+
+	// Test with only request line (no double CRLF) - parser should handle it
+	request2 := 'POST /api HTTP/1.1\r\n'.bytes()
+	req2 := decode_http_request(request2) or {
+		assert false, 'Failed to parse request without double CRLF: ${err}'
+		return
+	}
+	method2 := req2.buffer[req2.method.start..req2.method.start + req2.method.len].bytestr()
+	assert method2 == 'POST'
+}
+
+// Test HTTP/1.0 version
+fn test_parse_http_1_0_request() {
+	request := 'GET / HTTP/1.0\r\n'.bytes()
+	req := decode_http_request(request) or {
+		assert false, 'Failed to parse HTTP/1.0 request: ${err}'
+		return
+	}
+
+	version := req.buffer[req.version.start..req.version.start + req.version.len].bytestr()
+	assert version == 'HTTP/1.0'
+}
+
+// Test request with special characters in path
+fn test_parse_request_with_special_chars() {
+	request := 'GET /path%20with%20spaces HTTP/1.1\r\n'.bytes()
+	req := decode_http_request(request) or {
+		assert false, 'Failed to parse request with encoded chars: ${err}'
+		return
+	}
+
+	path := req.buffer[req.path.start..req.path.start + req.path.len].bytestr()
+	assert path == '/path%20with%20spaces'
+}
+
+// Test very long path
+fn test_parse_request_with_long_path() {
+	long_path := '/' + 'a'.repeat(1000)
+	request := 'GET ${long_path} HTTP/1.1\r\n'.bytes()
+	req := decode_http_request(request) or {
+		assert false, 'Failed to parse request with long path: ${err}'
+		return
+	}
+
+	path := req.buffer[req.path.start..req.path.start + req.path.len].bytestr()
+	assert path == long_path
+	assert path.len == 1001
+}
+
+// Test request with multiple headers
+fn test_parse_request_multiple_headers() {
+	request := 'GET / HTTP/1.1\r\n' + 'Host: example.com\r\n' + 'Accept: text/html\r\n' +
+		'Accept-Encoding: gzip\r\n' + 'Connection: keep-alive\r\n' + '\r\n'
+	req := decode_http_request(request.bytes()) or {
+		assert false, 'Failed to parse request with multiple headers: ${err}'
+		return
+	}
+
+	headers := req.buffer[req.header_fields.start..req.header_fields.start + req.header_fields.len].bytestr()
+	assert headers.contains('Host: example.com')
+	assert headers.contains('Accept: text/html')
+	assert headers.contains('Accept-Encoding: gzip')
+	assert headers.contains('Connection: keep-alive')
+}
