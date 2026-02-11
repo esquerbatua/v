@@ -97,6 +97,13 @@ pub fn (mut app ServerApp) json_echo(mut ctx ServerContext) veb.Result {
 	return ctx.ok(ctx.req.data)
 }
 
+// Slow endpoint that sleeps for 1 second - used for concurrency testing
+@['/slow']
+pub fn (mut app ServerApp) slow(mut ctx ServerContext) veb.Result {
+	time.sleep(1 * time.second)
+	return ctx.text('Slow response after 1 second')
+}
+
 @['/login'; post]
 pub fn (mut app ServerApp) login_form(mut ctx ServerContext, username string, password string) veb.Result {
 	return ctx.html('username: x${username}x | password: x${password}x')
