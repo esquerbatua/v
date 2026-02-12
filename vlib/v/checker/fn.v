@@ -212,8 +212,14 @@ fn (mut c Checker) fn_decl(mut node ast.FnDecl) {
 				c.error('byte is deprecated, use u8 instead', node.return_type_pos)
 			}
 		}
-		if return_sym.info is ast.ArrayFixed && c.array_fixed_has_unresolved_size(return_sym.info) {
-			c.unresolved_fixed_sizes << node
+		if return_sym.info is ast.ArrayFixed {
+			if c.array_fixed_has_unresolved_size(return_sym.info) {
+				c.unresolved_fixed_sizes << node
+			} else {
+				// Register the fixed array return wrapper type
+				c.table.find_or_register_array_fixed(return_sym.info.elem_type, return_sym.info.size,
+					return_sym.info.size_expr, true)
+			}
 		}
 
 		final_return_sym := c.table.final_sym(node.return_type)

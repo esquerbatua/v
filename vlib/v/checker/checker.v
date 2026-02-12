@@ -6155,6 +6155,11 @@ pub fn (mut c Checker) update_unresolved_fixed_sizes() {
 				typ_sym.name = new_sym.name
 				typ_sym.cname = new_sym.cname
 				typ_sym.info = new_sym.info
+				// Register the fixed array return wrapper type after resolving size
+				if new_sym.info is ast.ArrayFixed {
+					c.table.find_or_register_array_fixed(new_sym.info.elem_type, new_sym.info.size,
+						new_sym.info.size_expr, true)
+				}
 			}
 		} else if mut stmt is ast.TypeDecl { // alias
 			mut alias_decl := stmt

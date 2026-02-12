@@ -2112,6 +2112,12 @@ pub fn (mut g Gen) write_array_fixed_return_types() {
 			&& elem_sym.idx !in g.table.used_features.used_syms {
 			continue
 		}
+		// Also skip if element type is an array_fixed that isn't marked as used
+		// This prevents generating wrapper structs that reference undefined array types
+		if g.pref.skip_unused && elem_sym.kind == .array_fixed
+			&& elem_sym.idx !in g.table.used_features.used_syms {
+			continue
+		}
 		mut fixed_elem_name := g.styp(info.elem_type.set_nr_muls(0))
 		if info.elem_type.is_ptr() {
 			fixed_elem_name += '*'.repeat(info.elem_type.nr_muls())
