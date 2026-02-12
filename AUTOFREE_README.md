@@ -4,6 +4,8 @@ This directory contains a comprehensive investigation of all issues with the V c
 
 ## 📚 Documentation Files
 
+### Overview Documents
+
 | File | Size | Purpose |
 |------|------|---------|
 | [AUTOFREE_INVESTIGATION_SUMMARY.md](AUTOFREE_INVESTIGATION_SUMMARY.md) | 6.3 KB | **Start here** - Complete overview of investigation |
@@ -11,7 +13,19 @@ This directory contains a comprehensive investigation of all issues with the V c
 | [AUTOFREE_REPRODUCTION_GUIDE.md](AUTOFREE_REPRODUCTION_GUIDE.md) | 5.4 KB | Step-by-step reproduction instructions |
 | [AUTOFREE_QUICK_REFERENCE.md](AUTOFREE_QUICK_REFERENCE.md) | 4.4 KB | Quick lookup for users |
 
-**Total Documentation:** 864 lines, 24.4 KB
+### Individual Issue Documents (Agent-Ready)
+
+| File | Issue | Complexity |
+|------|-------|------------|
+| **[AUTOFREE_ISSUES_INDEX.md](AUTOFREE_ISSUES_INDEX.md)** | **Index/Manifest** | **Start here for fixes** |
+| [AUTOFREE_ISSUE_001_MATCH_EXPRESSION.md](AUTOFREE_ISSUE_001_MATCH_EXPRESSION.md) | Match expression C code | Medium-High |
+| [AUTOFREE_ISSUE_002_ARRAY_DEREFERENCE.md](AUTOFREE_ISSUE_002_ARRAY_DEREFERENCE.md) | Array pointer dereference | Low-Medium |
+| [AUTOFREE_ISSUE_003_UNDECLARED_IDENTIFIER.md](AUTOFREE_ISSUE_003_UNDECLARED_IDENTIFIER.md) | Scope tracking | High |
+| [AUTOFREE_ISSUE_004_FUNCTION_CALL_SYNTAX.md](AUTOFREE_ISSUE_004_FUNCTION_CALL_SYNTAX.md) | Function call cleanup | Medium-High |
+| [AUTOFREE_ISSUE_005_RESULT_OPTION_HANDLING.md](AUTOFREE_ISSUE_005_RESULT_OPTION_HANDLING.md) | Result/Option types | Medium-High |
+| [AUTOFREE_ISSUE_006_ENUM_DECLARATION.md](AUTOFREE_ISSUE_006_ENUM_DECLARATION.md) | Enum type names | Low-Medium |
+
+**Total Documentation:** 10 files, ~70 KB
 
 ## 🎯 Quick Links
 
@@ -19,9 +33,14 @@ This directory contains a comprehensive investigation of all issues with the V c
 - Want to know if `-autofree` works for your code? → [AUTOFREE_QUICK_REFERENCE.md](AUTOFREE_QUICK_REFERENCE.md)
 - Need to debug an `-autofree` error? → [AUTOFREE_REPRODUCTION_GUIDE.md](AUTOFREE_REPRODUCTION_GUIDE.md)
 
-### For Developers
-- Want to fix `-autofree` bugs? → [AUTOFREE_ISSUES.md](AUTOFREE_ISSUES.md)
+### For Developers Fixing Bugs
+- **Want individual, standalone issues to fix?** → [AUTOFREE_ISSUES_INDEX.md](AUTOFREE_ISSUES_INDEX.md) ⭐
+- Want technical analysis of all issues? → [AUTOFREE_ISSUES.md](AUTOFREE_ISSUES.md)
 - Need the full investigation report? → [AUTOFREE_INVESTIGATION_SUMMARY.md](AUTOFREE_INVESTIGATION_SUMMARY.md)
+
+### For AI Agents
+- **Get assignable task documents** → [AUTOFREE_ISSUES_INDEX.md](AUTOFREE_ISSUES_INDEX.md) ⭐
+- Each issue document is standalone and agent-ready
 
 ### For Managers/Reviewers
 - Want the executive summary? → [AUTOFREE_INVESTIGATION_SUMMARY.md](AUTOFREE_INVESTIGATION_SUMMARY.md#results)
