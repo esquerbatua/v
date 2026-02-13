@@ -318,22 +318,32 @@ fn (mut p Parser) partial_assign_stmt(left []ast.Expr) ast.Stmt {
 fn expr_has_block_or(expr ast.Expr) bool {
 	return match expr {
 		ast.CallExpr {
-			expr.or_block.kind == .block && expr.or_block.stmts.len > 0
+			(expr.or_block.kind == .block && expr.or_block.stmts.len > 0)
+				|| expr_has_block_or(expr.left)
 		}
 		ast.SelectorExpr {
-			expr.or_block.kind == .block && expr.or_block.stmts.len > 0
+			(expr.or_block.kind == .block && expr.or_block.stmts.len > 0)
+				|| expr_has_block_or(expr.expr)
 		}
 		ast.PrefixExpr {
-			expr.or_block.kind == .block && expr.or_block.stmts.len > 0
+			(expr.or_block.kind == .block && expr.or_block.stmts.len > 0)
+				|| expr_has_block_or(expr.right)
 		}
 		ast.SqlExpr {
 			expr.or_expr.kind == .block && expr.or_expr.stmts.len > 0
 		}
 		ast.IndexExpr {
-			expr.or_expr.kind == .block && expr.or_expr.stmts.len > 0
+			(expr.or_expr.kind == .block && expr.or_expr.stmts.len > 0)
+				|| expr_has_block_or(expr.left)
 		}
 		ast.Ident {
 			expr.or_expr.kind == .block && expr.or_expr.stmts.len > 0
+		}
+		ast.CastExpr {
+			expr_has_block_or(expr.expr)
+		}
+		ast.ParExpr {
+			expr_has_block_or(expr.expr)
 		}
 		else {
 			false
