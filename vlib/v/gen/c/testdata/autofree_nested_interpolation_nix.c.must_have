@@ -1,4 +1,0 @@
-builtin__str_intp
-os__Result res = os__execute(
-builtin__string_trim_space(res.output)
-builtin__println(

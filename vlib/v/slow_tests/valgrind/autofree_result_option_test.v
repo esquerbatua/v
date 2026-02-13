@@ -1,3 +1,6 @@
+// vtest vflags: -autofree
+// vtest build: !sanitize-address-gcc && !sanitize-address-clang
+
 // Test for autofree with Result types in string interpolation
 fn get_int() !int {
 	return 42
