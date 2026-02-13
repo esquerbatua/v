@@ -2362,17 +2362,17 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 			}
 			continue
 		}
-		if arg.expr is ast.CallExpr {
-			// Any argument can be an expression that has to be freed. Generate a tmp expression
-			// for each of those recursively.
-			g.autofree_call_pregen(arg.expr)
-		}
 		// Skip StringInterLiteral with result/option propagations
 		// These generate complex code with temp variables that shouldn't be pre-evaluated
 		if arg.expr is ast.StringInterLiteral {
 			if g.string_inter_literal_contains_result_or_option_propagation(arg.expr) {
 				continue
 			}
+		}
+		if arg.expr is ast.CallExpr {
+			// Any argument can be an expression that has to be freed. Generate a tmp expression
+			// for each of those recursively.
+			g.autofree_call_pregen(arg.expr)
 		}
 		free_tmp_arg_vars = true
 		fn_name := node.name.replace('.', '_') // can't use name...
