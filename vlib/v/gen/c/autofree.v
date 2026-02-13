@@ -35,7 +35,7 @@ fn (mut g Gen) autofree_scope_vars_stop(pos int, line_nr int, free_parent_scopes
 	}
 	g.trace_autofree('// autofree_scope_vars(pos=${pos} line_nr=${line_nr} scope.pos=${scope.start_pos} scope.end_pos=${scope.end_pos})')
 	g.autofree_scope_vars2(scope, scope.start_pos, scope.end_pos, line_nr, free_parent_scopes,
-		stop_pos)
+		stop_pos, pos)
 }
 
 @[if trace_autofree ?]
@@ -53,7 +53,7 @@ fn (mut g Gen) print_autofree_var(var ast.Var, comment string) {
 }
 
 fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, start_pos int, end_pos int, line_nr int, free_parent_scopes bool,
-	stop_pos int) {
+	stop_pos int, cleanup_pos int) {
 	if scope == unsafe { nil } {
 		return
 	}
@@ -88,11 +88,32 @@ fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, start_pos int, end_pos int
 				// // TODO: why 0?
 				// continue
 				// }
+				// Check if the variable was declared after the cleanup position
+				// In that case, it hasn't been declared yet in the C code
+				if obj.pos.pos > cleanup_pos {
+					g.trace_autofree('// skipping var "${obj.name}" - declared after cleanup pos')
+					continue
+				}
 				// if v.pos.pos > end_pos {
 				if obj.pos.pos > end_pos
 					|| (obj.pos.pos < start_pos && obj.pos.line_nr == line_nr)
 					|| (end_pos < scope.end_pos && obj.expr is ast.IfExpr) {
 					// Do not free vars that were declared after this scope
+					continue
+				}
+				// Check if the variable is in a child scope that doesn't contain cleanup_pos
+				// This handles cases where multiple sibling scopes (e.g., match branches)
+				// each have their own temporaries
+				mut skip_var := false
+				for child_scope in scope.children {
+					if child_scope.contains(obj.pos.pos) && !child_scope.contains(cleanup_pos) {
+						// Variable is in a child scope that doesn't contain the cleanup position
+						g.trace_autofree('// skipping var "${obj.name}" - in child scope not containing cleanup pos')
+						skip_var = true
+						break
+					}
+				}
+				if skip_var {
 					continue
 				}
 				if obj.expr is ast.IfGuardExpr {
@@ -133,7 +154,8 @@ fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, start_pos int, end_pos int
 	if free_parent_scopes && scope.parent != unsafe { nil } && !scope.detached_from_parent
 		&& (stop_pos == -1 || scope.parent.start_pos >= stop_pos) {
 		g.trace_autofree('// af parent scope:')
-		g.autofree_scope_vars2(scope.parent, start_pos, end_pos, line_nr, true, stop_pos)
+		g.autofree_scope_vars2(scope.parent, start_pos, end_pos, line_nr, true, stop_pos,
+			cleanup_pos)
 	}
 }
 
