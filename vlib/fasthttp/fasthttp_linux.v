@@ -199,7 +199,7 @@ fn handle_client_closure(epoll_fd int, client_fd int) {
 	close_socket(client_fd)
 }
 
-fn process_events(mut server Server, epoll_fd int, listen_fd int) {
+fn process_events(server Server, epoll_fd int, listen_fd int) {
 	mut events := [max_connection_size]C.epoll_event{}
 	mut request_buffer := []u8{len: server.max_request_buffer_size, cap: server.max_request_buffer_size}
 	unsafe {
@@ -421,7 +421,7 @@ pub fn (mut server Server) run() ! {
 			return
 		}
 
-		server.threads[i] = spawn process_events(mut server, server.epoll_fds[i], server.listen_fds[i])
+		server.threads[i] = spawn process_events(server, server.epoll_fds[i], server.listen_fds[i])
 	}
 
 	println('listening on http://0.0.0.0:${server.port}/')

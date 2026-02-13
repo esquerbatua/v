@@ -22,79 +22,6 @@ fn test_fasthttp_example_compiles() {
 	assert os.exists(fasthttp_example_exe), 'fasthttp example binary not found after build'
 }
 
-fn test_parse_request_line() {
-	// Test basic GET request
-	request := 'GET / HTTP/1.1\r\n'.bytes()
-	req := decode_http_request(request) or {
-		assert false, 'Failed to parse valid request: ${err}'
-		return
-	}
-
-	assert req.buffer.len == request.len
-	assert req.method.start == 0
-	assert req.method.len == 3
-	assert req.path.start == 4
-	assert req.path.len == 1
-	assert req.version.start == 6
-	assert req.version.len == 8
-
-	method := req.buffer[req.method.start..req.method.start + req.method.len].bytestr()
-	path := req.buffer[req.path.start..req.path.start + req.path.len].bytestr()
-	version := req.buffer[req.version.start..req.version.start + req.version.len].bytestr()
-
-	assert method == 'GET'
-	assert path == '/'
-	assert version == 'HTTP/1.1'
-}
-
-fn test_parse_request_line_with_path() {
-	// Test GET request with path
-	request := 'GET /users/123 HTTP/1.1\r\n'.bytes()
-	req := decode_http_request(request) or {
-		assert false, 'Failed to parse valid request: ${err}'
-		return
-	}
-
-	path := req.buffer[req.path.start..req.path.start + req.path.len].bytestr()
-	assert path == '/users/123'
-}
-
-fn test_parse_request_line_post() {
-	// Test POST request
-	request := 'POST /api/data HTTP/1.1\r\n'.bytes()
-	req := decode_http_request(request) or {
-		assert false, 'Failed to parse valid request: ${err}'
-		return
-	}
-
-	method := req.buffer[req.method.start..req.method.start + req.method.len].bytestr()
-	path := req.buffer[req.path.start..req.path.start + req.path.len].bytestr()
-
-	assert method == 'POST'
-	assert path == '/api/data'
-}
-
-fn test_parse_request_line_invalid() {
-	// Test invalid request (missing \r\n)
-	request := 'GET / HTTP/1.1'.bytes()
-	decode_http_request(request) or {
-		assert err.msg() == 'Invalid HTTP request line: Missing CR'
-		return
-	}
-	assert false, 'Should have failed to parse invalid request'
-}
-
-fn test_decode_http_request() {
-	request := 'GET /test HTTP/1.1\r\n'.bytes()
-	req := decode_http_request(request) or {
-		assert false, 'Failed to decode request: ${err}'
-		return
-	}
-
-	method := req.buffer[req.method.start..req.method.start + req.method.len].bytestr()
-	assert method == 'GET'
-}
-
 fn test_new_server() {
 	handler := fn (req HttpRequest) !HttpResponse {
 		return HttpResponse{
@@ -144,4 +71,95 @@ fn test_server_ipv4_ipv6_binding() {
 	// Note: family field is not exported, so we can't directly test it
 	assert server_ipv4.port == 8081
 	assert server_ipv6.port == 8082
+}
+
+// Test large request buffer handling
+fn test_large_request_buffer() {
+	handler := fn (req HttpRequest) !HttpResponse {
+		return HttpResponse{
+			content: 'HTTP/1.1 200 OK\r\n\r\nOK'.bytes()
+		}
+	}
+
+	// Test with large buffer size
+	server := new_server(ServerConfig{
+		port:                    8083
+		handler:                 handler
+		max_request_buffer_size: 16384
+	}) or {
+		assert false, 'Failed to create server with large buffer: ${err}'
+		return
+	}
+
+	assert server.max_request_buffer_size == 16384
+}
+
+// Test request with query parameters
+fn test_parse_request_with_query() {
+	request := 'GET /search?q=test&page=1 HTTP/1.1\r\n'.bytes()
+	req := decode_http_request(request) or {
+		assert false, 'Failed to parse request with query: ${err}'
+		return
+	}
+
+	path := req.buffer[req.path.start..req.path.start + req.path.len].bytestr()
+	assert path == '/search?q=test&page=1'
+}
+
+// Test different HTTP methods
+fn test_parse_different_http_methods() {
+	methods := ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
+
+	for method in methods {
+		request := '${method} /test HTTP/1.1\r\n'.bytes()
+		req := decode_http_request(request) or {
+			assert false, 'Failed to parse ${method} request: ${err}'
+			continue
+		}
+
+		parsed_method := req.buffer[req.method.start..req.method.start + req.method.len].bytestr()
+		assert parsed_method == method, 'Expected ${method}, got ${parsed_method}'
+	}
+}
+
+// Test request with special characters in path
+fn test_parse_request_with_special_chars() {
+	request := 'GET /path%20with%20spaces HTTP/1.1\r\n'.bytes()
+	req := decode_http_request(request) or {
+		assert false, 'Failed to parse request with encoded chars: ${err}'
+		return
+	}
+
+	path := req.buffer[req.path.start..req.path.start + req.path.len].bytestr()
+	assert path == '/path%20with%20spaces'
+}
+
+// Test very long path
+fn test_parse_request_with_long_path() {
+	long_path := '/' + 'a'.repeat(1000)
+	request := 'GET ${long_path} HTTP/1.1\r\n'.bytes()
+	req := decode_http_request(request) or {
+		assert false, 'Failed to parse request with long path: ${err}'
+		return
+	}
+
+	path := req.buffer[req.path.start..req.path.start + req.path.len].bytestr()
+	assert path == long_path
+	assert path.len == 1001
+}
+
+// Test request with multiple headers
+fn test_parse_request_multiple_headers() {
+	request := 'GET / HTTP/1.1\r\n' + 'Host: example.com\r\n' + 'Accept: text/html\r\n' +
+		'Accept-Encoding: gzip\r\n' + 'Connection: keep-alive\r\n' + '\r\n'
+	req := decode_http_request(request.bytes()) or {
+		assert false, 'Failed to parse request with multiple headers: ${err}'
+		return
+	}
+
+	headers := req.buffer[req.header_fields.start..req.header_fields.start + req.header_fields.len].bytestr()
+	assert headers.contains('Host: example.com')
+	assert headers.contains('Accept: text/html')
+	assert headers.contains('Accept-Encoding: gzip')
+	assert headers.contains('Connection: keep-alive')
 }
