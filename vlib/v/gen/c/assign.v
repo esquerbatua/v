@@ -254,22 +254,36 @@ fn (mut g Gen) assign_stmt(node_ ast.AssignStmt) {
 		if first_left_type == ast.string_type || first_left_sym.kind == .array {
 			type_to_free = if first_left_type == ast.string_type { 'string' } else { 'array' }
 			mut ok := true
+			mut is_ptr := false
 			left0 := node.left[0]
 			if left0 is ast.Ident {
 				if left0.name == '_' {
 					ok = false
 				}
+				// Check if the variable is a mut parameter (becomes a pointer in C)
+				if left0.obj is ast.Var {
+					is_ptr = left0.obj.is_arg
+				}
+			}
+			// Also check if the type itself is a pointer
+			if !is_ptr {
+				is_ptr = first_left_type.is_ptr()
 			}
 			if ok {
 				sref_name = '_sref${node.pos.pos}'
-				g.write('${type_to_free} ${sref_name} = (') // TODO: we are copying the entire string here, optimize
+				g.write('${type_to_free} ${sref_name} = ')
+				// Dereference pointer if needed
+				if is_ptr {
+					g.write('*')
+				}
+				// TODO: we are copying the entire string here, optimize
 				// we can't just do `.str` since we need the extra data from the string struct
 				// doing `&string` is also not an option since the stack memory with the data will be overwritten
 				g.expr(left0) // node.left[0])
 				if first_left_type.has_flag(.shared_f) {
 					g.write('->val')
 				}
-				g.writeln('); // free ${type_to_free} on re-assignment2')
+				g.writeln('; // free ${type_to_free} on re-assignment2')
 				defer(fn) {
 					if af {
 						g.writeln('builtin__${type_to_free}_free(&${sref_name});')
