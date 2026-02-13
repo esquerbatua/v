@@ -2406,35 +2406,35 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 		// Save stmt_path_pos and initialize with position 0 for the new builder
 		old_stmt_path_pos := g.stmt_path_pos
 		g.stmt_path_pos = [0] // Start with position 0 for go_before_last_stmt()
-		
+
 		g.expr(arg.expr)
 		expr_code := g.out.str().trim_space()
-		
+
 		// Restore the old builder and positions
 		g.out = old_out
 		g.stmt_path_pos = old_stmt_path_pos
 
 		g.is_autofree = old_is_autofree
 		g.is_autofree_tmp = false
-		
+
 		// Check if the expression generated code that requires special handling
 		has_newlines := expr_code.contains('\n')
 		has_prepend_comment := expr_code.contains('; /*')
-		
+
 		// Check if it starts with a type declaration
 		lines := expr_code.split('\n')
 		first_line := if lines.len > 0 { lines[0].trim_space() } else { expr_code.trim_space() }
-		starts_with_type_decl := first_line.starts_with('bool ') || first_line.starts_with('string ') 
-			|| first_line.starts_with('int ') || first_line.starts_with('_result_') 
-			|| first_line.starts_with('_option_')
-		
+		starts_with_type_decl := first_line.starts_with('bool ')
+			|| first_line.starts_with('string ') || first_line.starts_with('int ')
+			|| first_line.starts_with('_result_') || first_line.starts_with('_option_')
+
 		is_complex := has_newlines || has_prepend_comment || starts_with_type_decl
-		
+
 		if is_complex {
 			// Complex expression with statements or declarations
 			// Try to find the result variable from the generated code
 			mut result_var := ''
-			
+
 			// Pattern 1: if-expr with "TYPE _tN; /* if prepend */"
 			// Pattern 2: match-expr with "bool _t1 = true;"
 			// Pattern 3: result-expr with "_result_T _tN = ..."
@@ -2447,7 +2447,8 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 						result_var = parts[1].trim(';')
 						break
 					}
-				} else if trimmed.starts_with('bool _t') || trimmed.starts_with('string _t') || trimmed.starts_with('int _t') {
+				} else if trimmed.starts_with('bool _t') || trimmed.starts_with('string _t')
+					|| trimmed.starts_with('int _t') {
 					// Match-expression pattern: "bool _t1 = true;"
 					parts := trimmed.split(' ')
 					if parts.len >= 2 {
@@ -2463,7 +2464,7 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 					}
 				}
 			}
-			
+
 			// Handle based on the pattern found
 			if result_var != '' && has_prepend_comment {
 				// If-expression: emit code but filter out final temp var reference
@@ -2487,11 +2488,12 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 				// Remaining lines: the ternary expression - assign to autofree temp
 				remaining := lines[1..].join('\n').trim_space()
 				g.strs_to_free0 << 'string ${t} = ${remaining};'
-			} else if (first_line.starts_with('_result_') || first_line.starts_with('_option_')) && lines.len > 1 {
+			} else if (first_line.starts_with('_result_') || first_line.starts_with('_option_'))
+				&& lines.len > 1 {
 				// Result/Option type with unwrapping - complex
 				// The code contains result declarations, error checking, and the final value
 				// We need to emit all the result handling, then assign the final value to autofree temp
-				
+
 				// Find the last non-empty line which should be the actual value/call
 				mut value_line := ''
 				for idx := lines.len - 1; idx >= 0; idx-- {
@@ -2501,7 +2503,7 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 						break
 					}
 				}
-				
+
 				if value_line.len > 0 {
 					// Emit all lines except the last (value) line
 					mut stmt_lines := []string{}
