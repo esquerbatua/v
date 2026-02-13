@@ -2362,12 +2362,11 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 			}
 			continue
 		}
-		// Skip StringInterLiteral with result/option propagations
-		// These generate complex code with temp variables that shouldn't be pre-evaluated
+		// Skip StringInterLiteral arguments entirely for autofree pregen
+		// String interpolations can have complex nested expressions and code generation
+		// that doesn't work well with the cut_to approach used by autofree pregen
 		if arg.expr is ast.StringInterLiteral {
-			if g.string_inter_literal_contains_result_or_option_propagation(arg.expr) {
-				continue
-			}
+			continue
 		}
 		if arg.expr is ast.CallExpr {
 			// Any argument can be an expression that has to be freed. Generate a tmp expression
@@ -2416,57 +2415,6 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 		g.strs_to_free0 << s
 		// This tmp arg var will be freed with the rest of the vars at the end of the scope.
 	}
-}
-
-// Check if a StringInterLiteral contains result/option propagations in its embedded expressions
-fn (mut g Gen) string_inter_literal_contains_result_or_option_propagation(node ast.StringInterLiteral) bool {
-	for expr in node.exprs {
-		if g.expr_contains_result_or_option_propagation(expr) {
-			return true
-		}
-	}
-	return false
-}
-
-// Check if an expression contains result/option propagations
-fn (mut g Gen) expr_contains_result_or_option_propagation(expr ast.Expr) bool {
-	match expr {
-		ast.CallExpr {
-			// Check if this call has a propagation or-block (! or ?)
-			if expr.or_block.kind in [.propagate_option, .propagate_result] {
-				return true
-			}
-			// Recursively check arguments
-			for arg in expr.args {
-				if g.expr_contains_result_or_option_propagation(arg.expr) {
-					return true
-				}
-			}
-		}
-		ast.InfixExpr {
-			if g.expr_contains_result_or_option_propagation(expr.left)
-				|| g.expr_contains_result_or_option_propagation(expr.right) {
-				return true
-			}
-		}
-		ast.PrefixExpr {
-			if g.expr_contains_result_or_option_propagation(expr.right) {
-				return true
-			}
-		}
-		ast.ParExpr {
-			if g.expr_contains_result_or_option_propagation(expr.expr) {
-				return true
-			}
-		}
-		ast.SelectorExpr {
-			if g.expr_contains_result_or_option_propagation(expr.expr) {
-				return true
-			}
-		}
-		else {}
-	}
-	return false
 }
 
 fn (mut g Gen) call_args(node ast.CallExpr) {
