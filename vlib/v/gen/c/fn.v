@@ -2367,6 +2367,13 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 			// for each of those recursively.
 			g.autofree_call_pregen(arg.expr)
 		}
+		// Skip StringInterLiteral with result/option propagations
+		// These generate complex code with temp variables that shouldn't be pre-evaluated
+		if arg.expr is ast.StringInterLiteral {
+			if g.string_inter_literal_contains_result_or_option_propagation(arg.expr) {
+				continue
+			}
+		}
 		free_tmp_arg_vars = true
 		fn_name := node.name.replace('.', '_') // can't use name...
 		t := '_arg_expr_${fn_name}_${i}_${node.pos.pos}'
@@ -2409,6 +2416,57 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 		g.strs_to_free0 << s
 		// This tmp arg var will be freed with the rest of the vars at the end of the scope.
 	}
+}
+
+// Check if a StringInterLiteral contains result/option propagations in its embedded expressions
+fn (mut g Gen) string_inter_literal_contains_result_or_option_propagation(node ast.StringInterLiteral) bool {
+	for expr in node.exprs {
+		if g.expr_contains_result_or_option_propagation(expr) {
+			return true
+		}
+	}
+	return false
+}
+
+// Check if an expression contains result/option propagations
+fn (mut g Gen) expr_contains_result_or_option_propagation(expr ast.Expr) bool {
+	match expr {
+		ast.CallExpr {
+			// Check if this call has a propagation or-block (! or ?)
+			if expr.or_block.kind in [.propagate_option, .propagate_result] {
+				return true
+			}
+			// Recursively check arguments
+			for arg in expr.args {
+				if g.expr_contains_result_or_option_propagation(arg.expr) {
+					return true
+				}
+			}
+		}
+		ast.InfixExpr {
+			if g.expr_contains_result_or_option_propagation(expr.left)
+				|| g.expr_contains_result_or_option_propagation(expr.right) {
+				return true
+			}
+		}
+		ast.PrefixExpr {
+			if g.expr_contains_result_or_option_propagation(expr.right) {
+				return true
+			}
+		}
+		ast.ParExpr {
+			if g.expr_contains_result_or_option_propagation(expr.expr) {
+				return true
+			}
+		}
+		ast.SelectorExpr {
+			if g.expr_contains_result_or_option_propagation(expr.expr) {
+				return true
+			}
+		}
+		else {}
+	}
+	return false
 }
 
 fn (mut g Gen) call_args(node ast.CallExpr) {
@@ -2640,7 +2698,9 @@ fn (mut g Gen) call_args(node ast.CallExpr) {
 				// name := '_tt${g.tmp_count_af}_arg_expr_${fn_name}_${i}'
 				name := '_arg_expr_${fn_name}_${i + 1}_${node.pos.pos}'
 				scope := g.file.scope.innermost(node.pos.pos)
-				if !g.is_autofree_tmp || scope.known_var(name) {
+				// Only use the temp variable if it actually exists
+				// (it might not exist if we skipped creating it for expressions with result/option propagations)
+				if scope.known_var(name) {
 					g.write('/*autofree arg*/' + name)
 					wrote_tmp_arg = true
 				}
