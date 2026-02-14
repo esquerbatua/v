@@ -2362,6 +2362,12 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 			}
 			continue
 		}
+		// Skip StringInterLiteral arguments entirely for autofree pregen
+		// String interpolations can have complex nested expressions and code generation
+		// that doesn't work well with the cut_to approach used by autofree pregen
+		if arg.expr is ast.StringInterLiteral {
+			continue
+		}
 		if arg.expr is ast.CallExpr {
 			// Any argument can be an expression that has to be freed. Generate a tmp expression
 			// for each of those recursively.
@@ -2640,7 +2646,11 @@ fn (mut g Gen) call_args(node ast.CallExpr) {
 				// name := '_tt${g.tmp_count_af}_arg_expr_${fn_name}_${i}'
 				name := '_arg_expr_${fn_name}_${i + 1}_${node.pos.pos}'
 				scope := g.file.scope.innermost(node.pos.pos)
-				if !g.is_autofree_tmp || scope.known_var(name) {
+				// Use the temp variable if we're not in autofree_tmp mode (it was created earlier)
+				// OR if the variable is known in scope (when in autofree_tmp mode)
+				// Don't use it if we skipped creating it (StringInterLiterals)
+				if (!g.is_autofree_tmp && arg.expr !is ast.StringInterLiteral)
+					|| scope.known_var(name) {
 					g.write('/*autofree arg*/' + name)
 					wrote_tmp_arg = true
 				}
