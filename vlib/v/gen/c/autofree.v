@@ -88,12 +88,6 @@ fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, start_pos int, end_pos int
 				// // TODO: why 0?
 				// continue
 				// }
-				// Check if the variable was declared after the cleanup position
-				// In that case, it hasn't been declared yet in the C code
-				if obj.pos.pos > cleanup_pos {
-					g.trace_autofree('// skipping var "${obj.name}" - declared after cleanup pos')
-					continue
-				}
 				// if v.pos.pos > end_pos {
 				if obj.pos.pos > end_pos
 					|| (obj.pos.pos < start_pos && obj.pos.line_nr == line_nr)
@@ -114,6 +108,13 @@ fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, start_pos int, end_pos int
 					}
 				}
 				if skip_var {
+					continue
+				}
+				// Check if the variable was declared after the cleanup position
+				// This is only relevant for early exits (break/continue/return)
+				// where free_parent_scopes is true
+				if free_parent_scopes && obj.pos.pos > cleanup_pos {
+					g.trace_autofree('// skipping var "${obj.name}" - declared after cleanup pos')
 					continue
 				}
 				if obj.expr is ast.IfGuardExpr {
