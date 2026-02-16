@@ -35,7 +35,7 @@ fn (mut g Gen) autofree_scope_vars_stop(pos int, line_nr int, free_parent_scopes
 	}
 	g.trace_autofree('// autofree_scope_vars(pos=${pos} line_nr=${line_nr} scope.pos=${scope.start_pos} scope.end_pos=${scope.end_pos})')
 	g.autofree_scope_vars2(scope, scope.start_pos, scope.end_pos, line_nr, free_parent_scopes,
-		stop_pos)
+		stop_pos, pos)
 }
 
 @[if trace_autofree ?]
@@ -53,7 +53,7 @@ fn (mut g Gen) print_autofree_var(var ast.Var, comment string) {
 }
 
 fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, start_pos int, end_pos int, line_nr int, free_parent_scopes bool,
-	stop_pos int) {
+	stop_pos int, cleanup_pos int) {
 	if scope == unsafe { nil } {
 		return
 	}
@@ -95,6 +95,48 @@ fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, start_pos int, end_pos int
 					// Do not free vars that were declared after this scope
 					continue
 				}
+				// Check if the variable is in a child scope that doesn't contain cleanup_pos
+				// This handles cases where multiple sibling scopes (e.g., match branches)
+				// each have their own temporaries
+				mut skip_var := false
+				for child_scope in scope.children {
+					if child_scope.contains(obj.pos.pos) && !child_scope.contains(cleanup_pos) {
+						// Variable is in a child scope that doesn't contain the cleanup position
+						g.trace_autofree('// skipping var "${obj.name}" - in child scope not containing cleanup pos')
+						skip_var = true
+						break
+					}
+				}
+				if skip_var {
+					continue
+				}
+				// Additional check for temporary variables in complex generated code:
+				// Numeric temporaries (_t123) in generated code often have naming conflicts
+				// across sibling scopes. When not doing parent scope cleanup (early exit),
+				// skip these to avoid double-free or freeing undeclared variables
+				if !free_parent_scopes && obj.name.starts_with('_t') && obj.name.len > 2 {
+					// Check if the rest of the name is numeric
+					mut is_numeric_temp := true
+					for i in 2 .. obj.name.len {
+						if !obj.name[i].is_digit() {
+							is_numeric_temp = false
+							break
+						}
+					}
+					// Skip numeric temporaries in non-early-exit cleanup
+					// They should be freed in their immediate scope
+					if is_numeric_temp {
+						g.trace_autofree('// skipping numeric temp var "${obj.name}" - not in early exit cleanup')
+						continue
+					}
+				}
+				// Check if the variable was declared after the cleanup position
+				// This is only relevant for early exits (break/continue/return)
+				// where free_parent_scopes is true
+				if free_parent_scopes && obj.pos.pos > cleanup_pos {
+					g.trace_autofree('// skipping var "${obj.name}" - declared after cleanup pos')
+					continue
+				}
 				if obj.expr is ast.IfGuardExpr {
 					continue
 				}
@@ -133,7 +175,8 @@ fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, start_pos int, end_pos int
 	if free_parent_scopes && scope.parent != unsafe { nil } && !scope.detached_from_parent
 		&& (stop_pos == -1 || scope.parent.start_pos >= stop_pos) {
 		g.trace_autofree('// af parent scope:')
-		g.autofree_scope_vars2(scope.parent, start_pos, end_pos, line_nr, true, stop_pos)
+		g.autofree_scope_vars2(scope.parent, start_pos, end_pos, line_nr, true, stop_pos,
+			cleanup_pos)
 	}
 }
 

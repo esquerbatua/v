@@ -323,12 +323,24 @@ fn (mut g Gen) gen_branch_context_string() string {
 	mut arr := []string{}
 
 	// gen `T=int,X=string`
-	if g.cur_fn != unsafe { nil } && g.cur_fn.generic_names.len > 0
-		&& g.cur_fn.generic_names.len == g.cur_concrete_types.len {
-		for i in 0 .. g.cur_fn.generic_names.len {
-			arr << g.cur_fn.generic_names[i] + '=' +
+	mut generic_names := []string{}
+	if g.cur_fn != unsafe { nil } && g.cur_fn.generic_names.len > 0 {
+		generic_names = g.cur_fn.generic_names.clone()
+	} else if g.pref.new_generic_solver && g.cur_fn != unsafe { nil } {
+		// For new generic solver: check if this is a concrete function with registered types
+		eprintln('gen_branch_context_string: cur_fn=${g.cur_fn.name}, cur_concrete_types=${g.cur_concrete_types}')
+		if concrete_info := g.table.concrete_fn_types[g.cur_fn.name] {
+			generic_names = concrete_info.generic_names.clone()
+			eprintln('gen_branch_context_string: found concrete info for ${g.cur_fn.name}, generic_names: ${generic_names}, cur_concrete_types: ${g.cur_concrete_types}')
+		}
+	}
+	if generic_names.len > 0 && generic_names.len == g.cur_concrete_types.len {
+		for i in 0 .. generic_names.len {
+			arr << generic_names[i] + '=' +
 				util.strip_main_name(g.table.type_to_str(g.cur_concrete_types[i]))
 		}
+	} else if generic_names.len > 0 {
+		eprintln('gen_branch_context_string WARNING: generic_names.len=${generic_names.len}, cur_concrete_types.len=${g.cur_concrete_types.len}')
 	}
 
 	// gen comptime `$for`
@@ -422,6 +434,7 @@ fn (mut g Gen) comptime_if(node ast.IfExpr) {
 		if g.comptime.inside_comptime_for && g.comptime.comptime_for_field_var != '' {
 			idx_str += '|field_type=${g.comptime.comptime_for_field_type}|'
 		}
+		eprintln('[comptime_if line 432] cgen looking up idx_str: ${idx_str}')
 		if comptime_is_true := g.table.comptime_is_true[idx_str] {
 			// `g.table.comptime_is_true` are the branch condition results set by `checker`
 			is_true = comptime_is_true

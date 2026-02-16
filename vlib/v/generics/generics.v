@@ -501,21 +501,36 @@ pub fn (mut g Generics) generic_fn_decl(mut node ast.FnDecl) []ast.Stmt {
 			println('solve generic fn `${node.name}` for type `${the_type}`')
 		}
 		g.cur_concrete_types = concrete_types
+		// Also set table.cur_concrete_types so that comptime conditions can access it
+		g.table.cur_concrete_types = concrete_types
 
 		mut new_node := ast.FnDecl{
 			...node
 		}
 		new_node = g.stmt(mut new_node) as ast.FnDecl
+		concrete_fn_name := if node.is_method {
+			g.method_concrete_name(new_node.name, concrete_types, new_node.receiver.typ)
+		} else {
+			g.concrete_name(new_node.name, concrete_types)
+		}
 		new_node = ast.FnDecl{
 			...new_node
-			name:          if node.is_method {
-				g.method_concrete_name(new_node.name, concrete_types, new_node.receiver.typ)
-			} else {
-				g.concrete_name(new_node.name, concrete_types)
-			}
+			name:          concrete_fn_name
 			ninstances:    0
 			generic_names: []
 		}
+		// Register the mapping from concrete function name to its types
+		eprintln('generics: registering ${concrete_fn_name} with concrete_types: ${concrete_types}')
+		g.table.concrete_fn_types[concrete_fn_name] = ast.ConcreteFnTypeInfo{
+			generic_names:  node.generic_names
+			concrete_types: concrete_types
+		}
+		eprintln('generics: after registration, table has ${g.table.concrete_fn_types.len} entries')
+		
+		// Copy comptime_is_true entries with updated idx_str
+		// The generic template was checked with empty context, but cgen needs entries with concrete types
+		g.copy_comptime_is_true_for_concrete_fn(node, concrete_fn_name, concrete_types)
+		
 		if new_node.is_method {
 			mut sym := g.table.sym(new_node.receiver.typ)
 			func := ast.Fn{
@@ -552,6 +567,8 @@ pub fn (mut g Generics) generic_fn_decl(mut node ast.FnDecl) []ast.Stmt {
 		solved_fns << new_node
 	}
 	g.cur_concrete_types = []
+	// Also clear table.cur_concrete_types
+	g.table.cur_concrete_types = []
 	return solved_fns
 }
 
@@ -1273,4 +1290,46 @@ fn (mut g Generics) unwrap_generic(typ ast.Type) ast.Type {
 		}
 	}
 	return typ
+}
+
+// copy_comptime_is_true_for_concrete_fn copies comptime_is_true entries from the generic template
+// copy_comptime_is_true_for_concrete_fn copies comptime_is_true entries from the generic template
+// to the concrete function with updated idx_str that includes concrete type information
+fn (mut g Generics) copy_comptime_is_true_for_concrete_fn(template_node ast.FnDecl, concrete_fn_name string, concrete_types []ast.Type) {
+// Build the generic type context string for the concrete function
+mut generic_context := []string{}
+for i, gname in template_node.generic_names {
+if i < concrete_types.len {
+concrete_type_str := g.table.type_to_str(concrete_types[i]).replace('main.', '')
+generic_context << '${gname}=${concrete_type_str}'
+}
+}
+generic_context_str := generic_context.join(',')
+
+eprintln('copy_comptime_is_true_for_concrete_fn: ${concrete_fn_name}, generic_context: ${generic_context_str}')
+
+// Iterate over existing comptime_is_true entries
+mut new_entries := map[string]ast.ComptTimeCondResult{}
+for old_idx_str, result in g.table.comptime_is_true {
+// Check if this entry is for a comptime condition in the template function
+// Template entries have empty generic context or match the template pattern
+// We need to create new entries with the concrete type context
+if old_idx_str.starts_with('|id=') || old_idx_str.starts_with('field.name=') {
+// This is a template entry (no generic context prefix)
+// Create a new entry with generic context
+new_idx_str := if generic_context_str.len > 0 {
+'${generic_context_str}|${old_idx_str}'
+} else {
+old_idx_str
+}
+eprintln('  copying: ${old_idx_str} => ${new_idx_str}')
+new_entries[new_idx_str] = result
+}
+}
+
+// Add the new entries to the table
+for new_idx_str, result in new_entries {
+g.table.comptime_is_true[new_idx_str] = result
+}
+eprintln('  added ${new_entries.len} new entries')
 }
