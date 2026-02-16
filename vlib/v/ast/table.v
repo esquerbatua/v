@@ -56,6 +56,13 @@ pub fn (mut uf UsedFeatures) free() {
 	}
 }
 
+// ConcreteFnTypeInfo stores information about concrete instances created by the new generic solver
+pub struct ConcreteFnTypeInfo {
+pub:
+	generic_names  []string // original generic parameter names
+	concrete_types []Type   // concrete types for this instance
+}
+
 @[heap; minify]
 pub struct Table {
 mut:
@@ -73,6 +80,8 @@ pub mut:
 	cflags             []cflag.CFlag
 	redefined_fns      []string
 	fn_generic_types   map[string][][]Type // for generic functions
+	// For new generic solver: maps concrete function names to their generic info
+	concrete_fn_types  map[string]ConcreteFnTypeInfo
 	interfaces         map[int]InterfaceDecl
 	sumtypes           map[int]SumTypeDecl
 	cmod_prefix        string // needed for ast.type_to_str(Type) while vfmt; contains `os.`

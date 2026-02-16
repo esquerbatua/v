@@ -220,6 +220,23 @@ fn (mut g Gen) gen_fn_decl(node &ast.FnDecl, skip bool) {
 	defer {
 		g.is_autofree = old_g_autofree
 	}
+	// For new generic solver: check if this is a concrete function with registered types
+	if g.pref.new_generic_solver && node.generic_names.len == 0 && g.cur_concrete_types.len == 0 {
+		eprintln('fn.v checking for concrete info: ${node.name}')
+		eprintln('fn.v table has ${g.table.concrete_fn_types.len} entries')
+		if node.name == 'main.test_generic_T_main__TestStruct' {
+			eprintln('fn.v: this is our target function!')
+		}
+		if concrete_info := g.table.concrete_fn_types[node.name] {
+			eprintln('fn.v: FOUND concrete info, concrete_types: ${concrete_info.concrete_types}')
+			g.cur_concrete_types = concrete_info.concrete_types
+			eprintln('fn.v: cur_concrete_types is now ${g.cur_concrete_types}')
+			defer {
+				g.cur_concrete_types = []
+			}
+		}
+		eprintln('fn.v: after lookup, cur_concrete_types.len = ${g.cur_concrete_types.len}')
+	}
 	if node.generic_names.len > 0 && g.cur_concrete_types.len == 0 {
 		// need the cur_concrete_type check to avoid inf. recursion
 		// loop thru each generic type and generate a function
