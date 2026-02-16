@@ -2435,9 +2435,6 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 			// Try to find the result variable from the generated code
 			mut result_var := ''
 
-			// Pattern 1: if-expr with "TYPE _tN; /* if prepend */"
-			// Pattern 2: match-expr with "bool _t1 = true;"
-			// Pattern 3: result-expr with "_result_T _tN = ..."
 			for line in lines {
 				trimmed := line.trim_space()
 				if trimmed.contains('/* if prepend */') {
@@ -2492,7 +2489,6 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 				&& lines.len > 1 {
 				// Result/Option type with unwrapping - complex
 				// The code contains result declarations, error checking, and the final value
-				// We need to emit all the result handling, then assign the final value to autofree temp
 
 				// Find the last non-empty line which should be the actual value/call
 				mut value_line := ''
@@ -2516,25 +2512,20 @@ fn (mut g Gen) autofree_call_pregen(node ast.CallExpr) {
 					if stmt_lines.len > 0 {
 						g.strs_to_free0 << stmt_lines.join('\n')
 					}
-					// Assign the value to our autofree temp
 					g.strs_to_free0 << 'string ${t} = ${value_line};'
 				} else {
-					// Fallback
 					g.strs_to_free0 << expr_code
 				}
 			} else {
-				// Fallback for other complex expressions
 				s += expr_code
 				s += ';'
 				g.strs_to_free0 << s
 			}
 		} else {
-			// Simple expression - wrap in assignment as before
 			s += expr_code
 			s += ';'
 			g.strs_to_free0 << s
 		}
-		// This tmp arg var will be freed with the rest of the vars at the end of the scope.
 	}
 }
 
