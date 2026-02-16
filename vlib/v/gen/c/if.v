@@ -181,10 +181,8 @@ fn (mut g Gen) needs_conds_order(node ast.IfExpr) bool {
 }
 
 fn (mut g Gen) if_expr(node ast.IfExpr) {
-	// Check if there's an outer_tmp_var set for this if expression
 	use_outer_tmp := g.outer_tmp_var != ''
 	saved_outer_tmp_var := g.outer_tmp_var
-	// Clear it immediately so nested contexts don't see it
 	if use_outer_tmp {
 		g.outer_tmp_var = ''
 	}
